@@ -1,0 +1,290 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<title>LeapFM - File Manager</title>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+
+	<link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+
+	<script src="{{ url_for('static', filename='js/three.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/CanvasRenderer.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/Projector.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/OrbitControls.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/Detector.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/DDSLoader.js') }}"></script>
+	<script src="{{ url_for('static', filename='js/dat.gui.min.js') }}"></script>
+	<script	src="https://code.jquery.com/jquery-3.2.1.min.js" integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4=" crossorigin="anonymous"></script>
+</head>
+<body>
+	<center><h1 id="short_path">{ data.short_path }</h1></center>
+	<div id="container">
+		<canvas id="c"></canvas>
+
+		<div id="content">
+
+		</div>
+
+		<script id="template" type="notjs">
+			<div class="scene"></div>
+			<div class="description">$</div>
+		</script>
+	</div>
+
+	<script>
+
+		if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+		var canvas;
+		var scenes, renderer;
+		var main_scene;
+		var main_renderer;
+		var main_camera;
+		var container;
+		var FMData;		
+
+		init();
+		animate();
+
+		function init() {			
+			scenes = [];
+			container = $("#container");
+
+			//canvas = document.getElementById( "c" );
+			canvas = $("#c");
+			canvas.empty();
+
+			main_scene = new THREE.Scene();
+			main_camera = new THREE.PerspectiveCamera( 50, 1, 1, 100 );
+			main_camera.position.z = 10;
+			main_scene.userData.camera = main_camera;
+
+			main_renderer = new THREE.CanvasRenderer();
+			main_renderer.setClearColor(0xffffff, 0); // black            ;
+			main_renderer.setPixelRatio(window.devicePixelRatio);
+			main_renderer.setSize(window.innerWidth, window.innerHeight);
+
+			if(container.children().last().is("canvas"))
+			{
+				container.children().last().remove();			
+			}
+			container.append(main_renderer.domElement);
+			
+
+			var geometries = [
+			new THREE.BoxGeometry( 1, 1, 1 )
+			//new THREE.SphereGeometry( 0.5, 12, 8 ),
+			//new THREE.DodecahedronGeometry( 0.5 ),
+			//new THREE.CylinderGeometry( 0.5, 0.5, 1, 12 )
+			];
+
+			var template = $("#template").text();
+			var content = $("#content");
+			content.empty();
+			
+			var iSize = 0;
+			if(FMData && FMData.length)
+			{				
+				iSize = FMData[0].list[0].count;
+				console.log(iSize);
+			}
+
+			for ( var i =  0; i < iSize; i ++ ) {
+
+				var scene = new THREE.Scene();
+				var loader = new THREE.DDSLoader();
+				var map1;
+				if(FMData[0].list[0].content[i].type == 'folder')
+					map1 = loader.load( "{{ url_for('static', filename='textures/fontawesome/folder.dds') }}" );
+				else if(FMData[0].list[0].content[i].type == 'file')
+					map1 = loader.load( "{{ url_for('static', filename='textures/fontawesome/file.dds') }}" );
+
+				map1.minFilter = map1.magFilter = THREE.LinearFilter;
+				map1.anisotropy = 4;
+
+				var cubemap1 = loader.load( "{{ url_for('static', filename='textures/compressed/Mountains.dds') }}", function ( texture ) {
+					texture.magFilter = THREE.LinearFilter;
+					texture.minFilter = THREE.LinearFilter;
+					texture.mapping = THREE.CubeReflectionMapping;
+					material1.needsUpdate = true;
+				} );
+
+				var material1 = new THREE.MeshBasicMaterial( { map: map1, envMap: cubemap1 } );
+
+
+				var element = document.createElement( "div" );
+				element.className = "list-item";
+
+				element.innerHTML = template.replace( '$', FMData[0].list[0].content[i].name );
+
+
+				scene.userData.element = element.querySelector( ".scene" );
+				content.append( element );
+
+				var camera = new THREE.PerspectiveCamera( 50, 1, 1, 10 );
+				camera.position.z = 2;
+				scene.userData.camera = camera;
+
+				var controls = new THREE.OrbitControls( scene.userData.camera, scene.userData.element );
+				controls.minDistance = 2;
+				controls.maxDistance = 5;
+				controls.enablePan = false;
+				controls.enableZoom = false;
+				scene.userData.controls = controls;
+
+
+				var geometry = geometries[ geometries.length * Math.random() | 0 ];
+
+				var material = new THREE.MeshStandardMaterial( {
+
+					color: new THREE.Color().setHSL( Math.random(), 1, 0.75 ),
+					roughness: 0.5,
+					metalness: 0,
+					flatShading: true
+
+				} );
+
+				/*if(i==8)
+				{
+					main_scene.add( new THREE.Mesh( geometry, material1 ) );
+					main_scene.add( new THREE.HemisphereLight( 0xaaaaaa, 0x444444 ) );
+					var light = new THREE.DirectionalLight( 0xffffff, 0.5 );
+					light.position.set( 1, 1, 1 );
+					main_scene.add( light );
+					break;
+				}*/
+
+				scene.add( new THREE.Mesh( geometry, material1 ) );
+
+				scene.add( new THREE.HemisphereLight( 0xaaaaaa, 0x444444 ) );
+
+				var light = new THREE.DirectionalLight( 0xffffff, 0.5 );
+				light.position.set( 1, 1, 1 );
+				scene.add( light );
+
+				scenes.push( scene );
+
+			}
+
+			renderer = new THREE.WebGLRenderer( { canvas: canvas[0], antialias: false, alpha: true} );
+			renderer.autoClear = false;
+			renderer.setClearColor( 0xffffff, 0 );
+			renderer.render(main_scene, main_camera);
+			renderer.setPixelRatio( window.devicePixelRatio );
+
+		}
+
+		function updateSize() {
+
+			var width = canvas[0].clientWidth;
+			var height = canvas[0].clientHeight;
+
+			if ( canvas[0].width !== width || canvas[0].height != height ) {
+
+				renderer.setSize( width, height, false );
+
+			}
+
+		}
+
+		function animate() {
+			requestAnimationFrame( animate );
+
+			renderer.clear();
+			renderer.render( main_scene, main_camera );
+
+			render();
+			renderer.clearDepth();
+				main_renderer.setClearColor(0xffffff, 1); // black
+				main_renderer.render( main_scene, main_camera );
+			}
+
+			function render() {
+
+				updateSize();
+				
+				renderer.setClearColor( 0xffffff, 0 );
+				renderer.setScissorTest( false );
+				renderer.clear();
+
+				renderer.setClearColor( 0xffffff, 0 );
+				renderer.setScissorTest( true );
+
+				scenes.forEach( function( scene ) {
+
+					// so something moves
+					scene.children[0].rotation.y = Date.now() * 0.000125;
+
+					// get the element that is a place holder for where we want to
+					// draw the scene
+					var element = scene.userData.element;
+
+					// get its position relative to the page's viewport
+					var rect = element.getBoundingClientRect();
+
+					// check if it's offscreen. If so skip it
+					if ( rect.bottom < 0 || rect.top  > renderer.domElement.clientHeight ||
+						rect.right  < 0 || rect.left > renderer.domElement.clientWidth ) {
+
+						return;  // it's off screen
+
+				}
+
+					// set the viewport
+					var width  = rect.right - rect.left;
+					var height = rect.bottom - rect.top;
+					var left   = rect.left;
+					var top    = rect.top;
+
+					renderer.setViewport( left, top, width, height );
+					renderer.setScissor( left, top, width, height );
+
+					var camera = scene.userData.camera;
+
+					//camera.aspect = width / height; // not changing in this example
+					//camera.updateProjectionMatrix();
+
+					//scene.userData.controls.update();
+
+					renderer.render( scene, camera );
+
+				} );				
+			}
+
+			var LeapFM = function() {
+				this.root_path = '/';
+				this.speed = 0.8;
+				this.displayOutline = false;
+				this.explode = function() {  };
+			};
+
+			window.onload = function() {
+				var text = new LeapFM();
+				var gui = new dat.GUI();
+				var controller = gui.add(text, 'root_path');			
+
+				controller.onChange(function(value) {
+					var dataString = 'path='+value;
+					$.ajax({
+						type: "POST",
+						url: "/list_path",
+						data: dataString,
+						success: function(result){
+							console.log(result);
+
+							if(result.length)
+							{
+								FMData = result;
+								$("#short_path").text(result[0].short_path);
+								init();
+								animate();
+							}							
+						} 
+					});
+				});	
+			};
+		</script>
+
+	</body>
+	</html>
